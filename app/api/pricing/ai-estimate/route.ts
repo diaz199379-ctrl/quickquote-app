@@ -1,13 +1,19 @@
 /**
  * AI Price Estimation API Endpoint
- * Uses OpenAI to estimate material prices based on market data
+ * Uses DeepSeek (OpenAI-compatible) to estimate material prices based on market data
+ * 
+ * Why DeepSeek?
+ * - 20x cheaper than OpenAI GPT-3.5 (~$0.0001 vs $0.002 per 1K tokens)
+ * - OpenAI-compatible API (drop-in replacement)
+ * - Excellent quality for construction/estimating tasks
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
 
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || '',
+  apiKey: process.env.DEEPSEEK_API_KEY || '',
+  baseURL: 'https://api.deepseek.com/v1', // DeepSeek API endpoint
 })
 
 export async function POST(request: NextRequest) {
@@ -51,7 +57,7 @@ Consider factors like:
 Response must be valid JSON only, no additional text.`
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4-turbo-preview',
+      model: 'deepseek-chat', // DeepSeek's flagship model
       messages: [
         {
           role: 'system',
@@ -68,7 +74,7 @@ Response must be valid JSON only, no additional text.`
 
     const responseText = completion.choices[0]?.message?.content
     if (!responseText) {
-      throw new Error('No response from OpenAI')
+      throw new Error('No response from DeepSeek')
     }
 
     const priceData = JSON.parse(responseText)
@@ -77,8 +83,8 @@ Response must be valid JSON only, no additional text.`
       estimated_price: priceData.estimated_price,
       confidence: priceData.confidence || 'medium',
       price_range: priceData.price_range,
-      notes: priceData.notes || 'AI-powered market estimate',
-      source: 'openai',
+      notes: priceData.notes || 'AI-powered market estimate (DeepSeek)',
+      source: 'deepseek',
       timestamp: new Date().toISOString()
     })
 

@@ -1,40 +1,47 @@
 /**
- * OpenAI Server-Side API Wrapper
+ * DeepSeek Server-Side API Wrapper (OpenAI-Compatible)
  * 
- * SECURITY: This module ensures OpenAI API keys never reach the client
+ * SECURITY: This module ensures DeepSeek API keys never reach the client
  * ⚠️  NEVER import this in client-side code!
  * ⚠️  Only use in API routes and server components
- * ⚠️  Environment variable OPENAI_API_KEY must NOT have NEXT_PUBLIC_ prefix
+ * ⚠️  Environment variable DEEPSEEK_API_KEY must NOT have NEXT_PUBLIC_ prefix
  * 
  * Usage:
- * - Price estimation
+ * - Price estimation (70-95% cheaper than OpenAI!)
  * - Material suggestions
  * - Project description generation
  * - Cost prediction
+ * 
+ * Why DeepSeek?
+ * - OpenAI-compatible API (drop-in replacement)
+ * - 20x cheaper than GPT-3.5 (~$0.0001 vs $0.002 per 1K tokens)
+ * - Excellent quality for construction/estimating tasks
+ * - Fast response times
  */
 
 import OpenAI from 'openai'
 
 // Validate environment variable
-if (!process.env.OPENAI_API_KEY) {
+if (!process.env.DEEPSEEK_API_KEY) {
   console.warn(
-    '⚠️  OPENAI_API_KEY not set. AI features will not work. ' +
-    'Add it to your .env.local file.'
+    '⚠️  DEEPSEEK_API_KEY not set. AI features will not work. ' +
+    'Add it to your .env.local file. Get your key at: https://platform.deepseek.com'
   )
 }
 
 /**
- * OpenAI client instance (server-side only)
+ * DeepSeek client instance (OpenAI-compatible, server-side only)
  */
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || '',
+  apiKey: process.env.DEEPSEEK_API_KEY || '',
+  baseURL: 'https://api.deepseek.com/v1', // DeepSeek API endpoint
 })
 
 /**
- * Check if OpenAI is configured
+ * Check if DeepSeek is configured
  */
 export function isOpenAIConfigured(): boolean {
-  return Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.startsWith('sk-'))
+  return Boolean(process.env.DEEPSEEK_API_KEY)
 }
 
 /**
@@ -44,13 +51,13 @@ function assertServerSide(functionName: string): void {
   if (typeof window !== 'undefined') {
     throw new Error(
       `${functionName} can only be called server-side. ` +
-      'This function uses the OpenAI API key which must never be exposed to the client.'
+      'This function uses the DeepSeek API key which must never be exposed to the client.'
     )
   }
 }
 
 /**
- * Estimate material price using OpenAI
+ * Estimate material price using DeepSeek AI
  * 
  * @param material - Material name
  * @param category - Material category
@@ -71,7 +78,7 @@ export async function estimateMaterialPrice(
   assertServerSide('estimateMaterialPrice')
   
   if (!isOpenAIConfigured()) {
-    throw new Error('OpenAI API key is not configured')
+    throw new Error('DeepSeek API key is not configured')
   }
 
   const prompt = `
@@ -103,7 +110,7 @@ Do not include any text outside the JSON object.
 
   try {
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: 'deepseek-chat', // DeepSeek's flagship model
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.3,
       max_tokens: 200,
@@ -112,7 +119,7 @@ Do not include any text outside the JSON object.
 
     const content = response.choices[0]?.message?.content
     if (!content) {
-      throw new Error('OpenAI returned empty response')
+      throw new Error('DeepSeek returned empty response')
     }
 
     const parsed = JSON.parse(content)
@@ -123,7 +130,7 @@ Do not include any text outside the JSON object.
       !['high', 'medium', 'low'].includes(parsed.confidence) ||
       typeof parsed.notes !== 'string'
     ) {
-      throw new Error('Invalid response format from OpenAI')
+      throw new Error('Invalid response format from DeepSeek')
     }
 
     return {
@@ -132,13 +139,13 @@ Do not include any text outside the JSON object.
       notes: parsed.notes,
     }
   } catch (error: any) {
-    console.error('OpenAI API Error:', error.message)
+    console.error('DeepSeek API Error:', error.message)
     throw new Error(`Failed to estimate price: ${error.message}`)
   }
 }
 
 /**
- * Generate project suggestions using OpenAI
+ * Generate project suggestions using DeepSeek AI
  * 
  * @param projectType - Type of project
  * @param dimensions - Project dimensions
@@ -157,7 +164,7 @@ export async function generateProjectSuggestions(
   assertServerSide('generateProjectSuggestions')
   
   if (!isOpenAIConfigured()) {
-    throw new Error('OpenAI API key is not configured')
+    throw new Error('DeepSeek API key is not configured')
   }
 
   const prompt = `
@@ -184,7 +191,7 @@ Limit to 3-5 items per category.
 
   try {
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: 'deepseek-chat', // DeepSeek's flagship model
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.7,
       max_tokens: 500,
@@ -193,7 +200,7 @@ Limit to 3-5 items per category.
 
     const content = response.choices[0]?.message?.content
     if (!content) {
-      throw new Error('OpenAI returned empty response')
+      throw new Error('DeepSeek returned empty response')
     }
 
     const parsed = JSON.parse(content)
@@ -204,13 +211,13 @@ Limit to 3-5 items per category.
       warnings: parsed.warnings || [],
     }
   } catch (error: any) {
-    console.error('OpenAI API Error:', error.message)
+    console.error('DeepSeek API Error:', error.message)
     throw new Error(`Failed to generate suggestions: ${error.message}`)
   }
 }
 
 /**
- * Generate project description using OpenAI
+ * Generate project description using DeepSeek AI
  * 
  * @param projectType - Type of project
  * @param dimensions - Project dimensions
@@ -225,7 +232,7 @@ export async function generateProjectDescription(
   assertServerSide('generateProjectDescription')
   
   if (!isOpenAIConfigured()) {
-    throw new Error('OpenAI API key is not configured')
+    throw new Error('DeepSeek API key is not configured')
   }
 
   const prompt = `
@@ -245,7 +252,7 @@ Keep it concise and actionable.
 
   try {
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: 'deepseek-chat', // DeepSeek's flagship model
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.7,
       max_tokens: 300,
@@ -253,18 +260,18 @@ Keep it concise and actionable.
 
     const content = response.choices[0]?.message?.content
     if (!content) {
-      throw new Error('OpenAI returned empty response')
+      throw new Error('DeepSeek returned empty response')
     }
 
     return content.trim()
   } catch (error: any) {
-    console.error('OpenAI API Error:', error.message)
+    console.error('DeepSeek API Error:', error.message)
     throw new Error(`Failed to generate description: ${error.message}`)
   }
 }
 
 /**
- * Get OpenAI usage statistics (for monitoring)
+ * Get DeepSeek usage statistics (for monitoring)
  */
 export async function getOpenAIUsage() {
   assertServerSide('getOpenAIUsage')
@@ -273,11 +280,11 @@ export async function getOpenAIUsage() {
     return { configured: false, tokensUsed: 0 }
   }
 
-  // Note: OpenAI doesn't provide a direct usage API in the SDK
-  // You would need to track this in your database or use OpenAI dashboard
+  // Note: DeepSeek doesn't provide a direct usage API in the SDK
+  // You would need to track this in your database or use DeepSeek dashboard
   return {
     configured: true,
-    message: 'Check OpenAI dashboard for usage statistics',
+    message: 'Check DeepSeek dashboard for usage statistics at https://platform.deepseek.com',
   }
 }
 
