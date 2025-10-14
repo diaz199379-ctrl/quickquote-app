@@ -1,54 +1,15 @@
 import { AIMessage, AIContext, AIAssistantConfig, AISuggestion } from '@/types/ai'
 
 export class AIAssistant {
-  private apiKey: string
   private defaultConfig: AIAssistantConfig
 
   constructor() {
-    this.apiKey = process.env.NEXT_PUBLIC_OPENAI_API_KEY || ''
     this.defaultConfig = {
-      model: 'gpt-3.5-turbo', // Using GPT-3.5 Turbo (available to all users)
+      model: 'deepseek-chat', // Using DeepSeek via secure API route
       temperature: 0.7,
       maxTokens: 500,
-      enableStream: true
+      enableStream: false
     }
-  }
-
-  private buildSystemPrompt(context: AIContext): string {
-    const { projectType, zipCode, dimensions, materials, budget } = context
-
-    let prompt = `You are an expert construction assistant for QuickQuote AI, helping professional contractors with their projects.
-
-Your expertise includes:
-- Building code compliance (IRC 2021 standards)
-- Material selection and specifications
-- Installation best practices
-- Cost optimization strategies
-- Safety requirements and OSHA guidelines
-- Load calculations and structural requirements
-
-Current Project Context:
-${projectType ? `- Project Type: ${projectType}` : ''}
-${zipCode ? `- Location: ZIP ${zipCode}` : ''}
-${dimensions?.length && dimensions?.width ? `- Dimensions: ${dimensions.length}' × ${dimensions.width}' (${dimensions.sqft?.toFixed(0)} sqft)` : ''}
-${dimensions?.height ? `- Height: ${dimensions.height}' off ground` : ''}
-${materials?.deckingMaterial ? `- Decking: ${materials.deckingMaterial}` : ''}
-${materials?.framingMaterial ? `- Framing: ${materials.framingMaterial}` : ''}
-${materials?.railingStyle ? `- Railing: ${materials.railingStyle}` : ''}
-${budget ? `- Budget: $${budget.toLocaleString()}` : ''}
-
-Guidelines:
-- Provide concise, actionable advice
-- Reference specific code sections when relevant
-- Always remind users to verify with local building officials
-- If uncertain, say so and suggest where to find authoritative info
-- Consider regional variations (climate, soil conditions, local codes)
-- Prioritize safety and code compliance
-- Suggest cost-effective alternatives when appropriate
-
-Keep responses under 200 words unless asked for detailed explanations.`
-
-    return prompt
   }
 
   async sendMessage(
@@ -56,52 +17,33 @@ Keep responses under 200 words unless asked for detailed explanations.`
     context: AIContext,
     config?: AIAssistantConfig
   ): Promise<AIMessage> {
-    // If no API key, use fallback knowledge base
-    if (!this.apiKey) {
-      return this.getFallbackResponse(messages[messages.length - 1].content, context)
-    }
-
     const finalConfig = { ...this.defaultConfig, ...config }
 
     try {
-      const systemPrompt = this.buildSystemPrompt(context)
-      
-      const apiMessages = [
-        { role: 'system' as const, content: systemPrompt },
-        ...messages
-          .filter(m => m.role !== 'system')
-          .map(m => ({
-            role: m.role,
-            content: m.content
-          }))
-      ]
-
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      // Call our secure server-side API route (uses DeepSeek)
+      const response = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
         },
         body: JSON.stringify({
-          model: finalConfig.model,
-          messages: apiMessages,
-          temperature: finalConfig.temperature,
-          max_tokens: finalConfig.maxTokens,
-          stream: false // For simplicity, not using streaming in this implementation
+          messages: messages.map(m => ({
+            role: m.role,
+            content: m.content
+          })),
+          context
         })
       })
 
-      if (!response.ok) {
-        const error = await response.json()
-        // If quota exceeded, use fallback
-        if (error.error?.code === 'insufficient_quota' || response.status === 429) {
-          return this.getFallbackResponse(messages[messages.length - 1].content, context)
-        }
-        throw new Error(error.error?.message || 'Failed to get AI response')
+      const data = await response.json()
+
+      // If API returns fallback flag or error, use fallback knowledge base
+      if (!response.ok || data.fallback) {
+        console.log('AI API unavailable, using fallback knowledge base')
+        return this.getFallbackResponse(messages[messages.length - 1].content, context)
       }
 
-      const data = await response.json()
-      const content = data.choices[0]?.message?.content
+      const content = data.content
 
       if (!content) {
         throw new Error('No response from AI')
@@ -115,7 +57,7 @@ Keep responses under 200 words unless asked for detailed explanations.`
       }
     } catch (error) {
       console.error('AI Assistant error:', error)
-      // Try fallback on any error
+      // Use fallback on any error
       return this.getFallbackResponse(messages[messages.length - 1].content, context)
     }
   }
@@ -263,7 +205,7 @@ Or ask any specific question about your deck project!
 ${context.dimensions?.sqft ? `\n**Your project:** ${context.dimensions.sqft.toFixed(0)} sqft deck` : ''}
 ${context.dimensions?.height ? ` at ${context.dimensions.height}' height` : ''}
 
-📚 **Note:** Using built-in knowledge base (OpenAI API not configured). Responses are based on IRC 2021 and industry best practices.`
+📚 **Note:** Using built-in knowledge base (DeepSeek API temporarily unavailable). Responses are based on IRC 2021 and industry best practices.`
     }
 
     return {
